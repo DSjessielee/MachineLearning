@@ -1,0 +1,1070 @@
+---
+title: "STA380_2nd_Project_Team"
+author: "Abdullah Khan, Jessie Lee, Jesper Li, JT Flume"
+date: "8/1/2021"
+output: pdf_document
+---
+
+Team: Abdullah Khan, Jessie Lee, Jesper Li, JT Flume
+
+
+
+#Q1. Green Buildings
+
+```{r, include=FALSE}
+
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+
+
+green = read.csv('../data/greenbuildings.csv')
+
+#data frame with only all green rating buildings
+green_only = subset(green, green_rating==1)
+
+#data_frame with only non green rating buildings
+non_green = subset(green, green_rating==0)
+
+#calculate the mean of non green and green (just one) each cluster group 
+non_green_mean <- aggregate(non_green$Rent, list(non_green$cluster), mean)
+green_mean <- aggregate(green_only$Rent, list(green_only$cluster), mean)
+
+colnames(non_green_mean) <- c("cluster", "non_Green_Rent")
+colnames(green_mean) <- c("cluster", "Green_Rent")
+
+#Group data by clusters
+cluster_mean <- merge(non_green_mean,green_mean,by='cluster')
+cluster_mean$cluster = as.factor(cluster_mean$cluster)
+str(cluster_mean)
+
+#Calculate the difference between the 2 rent
+cluster_mean$perc_diff <- (cluster_mean$Green_Rent - cluster_mean$non_Green_Rent)*100/cluster_mean$non_Green_Rent
+str(cluster_mean)
+#order by perc diff between rents
+#cluster_mean <- cluster_mean[with(cluster_mean, order(Green_Rent)),]
+cluster_mean <- cluster_mean[order(cluster_mean$perc_diff), ] 
+
+
+mask = green[!green$leasing_rate <0.10,]
+#mask1 = mask[mask$size < 400000,]
+#mask2 = mask1[mask1$age < 20, ]
+mask$green_rating_type[mask$green_rating == 1] <- 'green'
+mask$green_rating_type[mask$green_rating == 0] <- 'not-green'
+mask$green_rating_type = as.factor(mask$green_rating_type)
+
+```
+
+Although it has some merit, I don't completely agree with the stats guru's evaluation.The key point here is that if we want to evaluate the economic viability of our project, we need to put it in the context of locations and the local market. For all real estate projects, location would be one of the most, if not THE MOST important factor for our analysis. This plot shows overall, for buildings with leasing_rate>10%, the average rent of green buildings is higher. However, the distribution of these rents is very wide. 
+
+
+```{r,echo=FALSE}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+##Plot
+ggplot(mask,aes(x = green_rating_type,y = mask$Rent)) + 
+  geom_boxplot(fill='yellow')+
+  scale_y_continuous(limits = c(0,95))+
+  labs(x = "Building",y = "Rent") + 
+  theme_bw()
+
+```
+
+If we look at all the clusters and their rents for all buildings, we can see the rent differs a lot by location(clusters). The same can be said for the rent difference between the non-green building and green buildings. It simply doesn't make sense to take the average (or median) of the black dots (green-building) and compare with the average (or median) of the blue dots (non green building rent).
+
+By examining the plot, we can see that the green building rent does have higher premium at locations more toward the right side of the graph than the very left side of the graph.
+
+
+```{r,echo=FALSE}
+
+#plotting two series, one from green-only, x is cluster y is rent,
+#the other data frame is cluster mean
+
+theme_set(theme_bw())  # pre-set the bw theme.
+data("cluster_mean", package = "ggplot2")
+
+# Scatterplot for cluster comparison
+
+ggplot(cluster_mean, aes(x=reorder(cluster, Green_Rent),y=Green_Rent), color="red") + geom_point() + 
+  labs(title="Rent Compare", 
+       #subtitle=,
+       caption="Rent for clusters",
+       x="Cluster",
+       y="Rent") +
+  geom_point(aes(y=non_Green_Rent),color="blue")
+
+```
+
+Let's see the distribution of the difference in rent price in percentage. It's a right-skewed distribution. The mean rent for green buildings is obviously higher than the mean for non-green buildings with a dense cluster at around 0-20%, and in some extreme cases over 200%. Obviously we want to identify the clusters where green-buildings give us a premium compared to the non-green buildings. We would suggest to avoid the locations that corresponds to the left side of the peak of the histogram, which are the locations that you won't gain much by investing more to build a green building. This is of course if we only consider the economic gains. 
+
+
+```{r,echo=FALSE}
+
+theme_set(theme_classic())
+
+# Histogram on a Continuous (Numeric) Variable
+g <- ggplot(cluster_mean, aes(perc_diff)) + scale_fill_brewer(palette = "Spectral")
+
+g + geom_histogram(fill="blue",
+                   bins=50,
+                   col="black", 
+                   size=.1) +  # change binwidth
+  labs(title="Green Building Vs Non-Green Building Rent Difference",
+       x="Rent Difference in Percentage",
+       y="Count",
+       subtitle="Do Green Buildings Rent Higher")  
+
+```
+
+
+This raises the question, what premium can green buildings charge for rent related to the rent of the local market? In another words, in higher end market, could we mark up the price even more? It doesn't appear so.
+
+
+```{r,echo=FALSE}
+
+# Scatterplot for rent and diff comparison
+ggplot(cluster_mean, aes(x=non_Green_Rent,y=perc_diff)) + 
+  geom_point(color="blue",size=4) +
+     labs(title="Rent Compare", 
+       caption="Rent for Location",
+       x="Mean Rent per sqft",
+       y="Percent Difference in Rent",)
+     
+```
+
+
+
+Let's take a look at the top 10 locations that you may want to consider to build your green-buildings and the bottom 10 locations you may want to avoid. Of course, each locations would have to be investigated in a local context but the first question that needs to be asked is: is the potential building location in East Cesar Chavez, just across I-35 from downtown among the top choices? If not, how far away it is from the top choices.
+
+If we have a solid understanding of what influences the price difference at these locations, the economic viability can then be calculated considering even more cost savings from the lower utility cost and higher occupancy rate, etc.
+
+
+
+```{r,echo=FALSE}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+#Bar plot
+    
+cluster_mean_low <- cluster_mean[order(cluster_mean$perc_diff), ][1:10,]
+
+cluster_mean_high <- cluster_mean[order(-cluster_mean$perc_diff), ][1:10,]
+
+cluster_polar <- rbind(cluster_mean_high, cluster_mean_low)
+cluster_polar$avoid <- ifelse(cluster_polar$perc_diff < 0, "avoid", "go")  # above / below avg flag
+
+theme_set(theme_bw())
+     
+     # Draw plot
+     ggplot(cluster_polar, aes(x=reorder(cluster,perc_diff), y=perc_diff)) + 
+       geom_bar(stat="identity", width=.5, aes(fill=avoid)) + 
+       scale_fill_manual(name="Green Premium", 
+                         labels = c("Top 10 Locations", "Botton 10 Locations"), 
+                         values = c("go"="#00ba38", "avoid"="#f8766d")) +
+       labs(title="Location to build and not to buid", 
+            x="Locations",
+            y="Price Difference",
+            subtitle="Green", 
+            caption="source: cluster mean") + 
+       theme(axis.text.x = element_text(angle=65, vjust=0.6))     
+
+     
+```
+
+
+
+
+
+
+
+
+#Q2.Flight data at ABIA: interesting observation of flight delay pattern in September, 2008
+
+```{r, include=FALSE}
+library(plyr)
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+df = read.csv('../data/abia.csv')
+
+#clean up na values in columns we interested
+df <- df %>% drop_na(ArrDelay, DepDelay)
+#df$DayOfWeek = mapvalues(df$DayOfWeek, c(1:7), c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+
+
+
+#modify the data from int to factor
+df$Month = as.factor(df$Month)
+df$DayOfWeek = as.factor(df$DayOfWeek)
+df$DayofMonth = as.factor(df$DayofMonth)
+df$CalendarDay = as.factor(paste(as.character(df$Month), '/', as.character(df$DayofMonth)))
+
+
+summary(df)
+str(df)
+
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS')
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS')
+
+delay_mean = aggregate(arrival$ArrDelay, list(arrival$Origin), mean)
+dealy_count = aggregate(arrival$Origin, list(arrival$Origin), count)
+
+total <- merge(delay_mean,dealy_count,by="Group.1")
+
+arrival_weekday = aggregate(arrival$ArrDelay, list(arrival$DayOfWeek), mean)
+arrival_weekday$Direction = 'Arrival'
+departure_weekday = aggregate(departure$DepDelay, list(departure$DayOfWeek), mean)
+departure_weekday$Direction = 'Departure'
+
+delay_weekday <- rbind(arrival_weekday, departure_weekday)
+
+names(delay_weekday)[names(delay_weekday) == "Group.1"] <- "Weekdays"
+names(delay_weekday)[names(delay_weekday) == "x"] <- "Delay"
+
+ggplot(data=delay_weekday, aes(x=Weekdays, y=Delay, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +labs(x='Day of week', y = 'Avg. Delay (min)', title = 'Average delay vs day of week')+ theme_light()
+
+
+arrival_month = aggregate(arrival$ArrDelay, list(arrival$Month), mean)
+arrival_month$Direction = 'Arrival'
+
+departure_month = aggregate(departure$ArrDelay, list(departure$Month), mean)
+departure_month$Direction = 'Departure'
+
+delay_month <- rbind(arrival_month, departure_month)
+
+names(delay_month)[names(delay_month) == "Group.1"] <- "Month"
+names(delay_month)[names(delay_month) == "x"] <- "Delay"
+
+```
+
+
+There are 48863 arrival and 48796 departure flight from Austin in 2008. We can see some weekly patterns on delays. Delay counts are highest on Thursdays and Fridays and we see a drop on Saturday, which is also true for the total flight numbers. 
+
+
+```{r,echo=FALSE}
+library(plyr)
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS')
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS')
+
+arrival_weekday <- arrival %>%  group_by(DayOfWeek) %>% dplyr::summarise(n = n())
+arrival_weekday$Direction = 'Arrival'
+departure_weekday <- departure %>% group_by(DayOfWeek) %>% dplyr::summarise(n = n())
+departure_weekday$Direction = 'Departure'
+
+delay_weekday <- rbind(arrival_weekday, departure_weekday)
+
+
+ggplot(data=delay_weekday, aes(x=DayOfWeek, y=n, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x='Day of week', 
+       y = 'Flight count', 
+       title = 'Average Delay vs Day of Week')+ 
+  theme_light()
+
+
+
+#Arrival delay count
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS' & df$ArrDelay > 0)
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS' & df$DepDelay > 0)
+
+arrival_weekday <- arrival %>% group_by(DayOfWeek) %>% dplyr::summarise(n = n())
+arrival_weekday$Direction = 'Arrival'
+departure_weekday <- departure %>% group_by(DayOfWeek) %>% dplyr::summarise(n = n())
+departure_weekday$Direction = 'Departure'
+
+delay_weekday <- rbind(arrival_weekday, departure_weekday)
+
+
+ggplot(data=delay_weekday, aes(x=DayOfWeek, y=n, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x='Day of week', 
+       y = 'Delay Flight Count', 
+       title = 'Average Delay vs Day of Week')+ 
+  theme_light()
+
+
+```
+
+Now let's take a look at the monthly flight and delay patterns.
+
+There is a significant reduction in mean monthly delay time in September, and note this data includes negative delays which means the flight actually departs or arrives earlier than scheduled. This reduction in flight numbers, delay counts, and overall delay time coincides with the onset of the economic crisis in 2008. This may be a result of reduced airport traffic, including overall passenger counts and flight counts that is potentially associated with canceled busines trips. Since we don't have the passenger numbers, we can see the reduced flight number dips in September.
+
+
+
+```{r,echo=FALSE}
+library(plyr)
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS')
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS')
+
+arrival_month = aggregate(arrival$ArrDelay, list(arrival$Month), mean)
+arrival_month$Direction = 'Arrival'
+
+departure_month = aggregate(departure$ArrDelay, list(departure$Month), mean)
+departure_month$Direction = 'Departure'
+
+delay_month <- rbind(arrival_month, departure_month)
+
+names(delay_month)[names(delay_month) == "Group.1"] <- "Month"
+names(delay_month)[names(delay_month) == "x"] <- "Delay"
+
+
+ggplot(data=delay_month, aes(x=Month, y=Delay, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +labs(x='Month', y = 'Avg. Delay (min)', title = 'Average delay vs Months')
+
+
+```
+
+
+```{r,echo=FALSE}
+library(plyr)
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS')
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS')
+
+arrival_month <- arrival %>% group_by(Month) %>% dplyr::summarise(n = n())
+arrival_month$Direction = 'Arrival'
+departure_month <- departure %>% group_by(Month) %>% dplyr::summarise(n = n())
+departure_month$Direction = 'Departure'
+
+delay_month <- rbind(arrival_month, departure_month)
+
+
+ggplot(data=delay_month, aes(x=Month, y=n, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +labs(x='Months', y = 'Flight Count', title = 'Total Flights by Month')+ theme_light()
+
+#subset of arrival records
+arrival = subset(df, df$Des=='AUS'& df$ArrDelay > 0)
+
+#subset for departure records
+departure = subset(df, df$Origin == 'AUS' & df$DepDelay > 0)
+
+arrival_month <- arrival %>% group_by(Month) %>% dplyr::summarise(n = n())
+arrival_month$Direction = 'Arrival'
+departure_month <- departure %>% group_by(Month) %>% dplyr::summarise(n = n())
+departure_month$Direction = 'Departure'
+
+delay_month <- rbind(arrival_month, departure_month)
+
+
+ggplot(data=delay_month, aes(x=Month, y=n, fill=Direction)) +
+  geom_bar(position="dodge", stat="identity") +labs(x='Months', y = 'Delay count', title = 'Total Delay Count vs Month')+ theme_light()
+```
+
+
+
+This plot shows the departure cities with longest average delays.
+
+
+
+```{r,echo=FALSE}
+
+delay_mean <- delay_mean[with(delay_mean,order(-x)),]
+
+data <- delay_mean[1:30,]
+
+#plotting two sets, one from green-only, x is cluster y is rent,
+#the other data frame is cluster mean
+ggplot(data, aes(x=reorder(Group.1,x), y=x), color='green') + 
+  geom_point(size=5,color='Tomato3') + 
+  labs(title="Top Airports with Arrival Delay by Time", 
+       #subtitle=,
+       caption="Delay",
+       x="Origin",
+       y="Delay(min)") 
+```
+
+
+#Q3. Portfolio
+
+
+```{r, include=FALSE}
+
+library(mosaic)
+library(quantmod)
+library(foreach)
+
+```
+
+##First portfolio
+
+The first set of ETF's are value-based equity funds, including "VOE", "VLUE", "IVE" and "SLYV". They include large, median and low market cap ETFs. As stated, these are ETF's trying to gather collections of low growth but stocks. The four EFTs are equally weighted at 25% each and are re-balanced each day. As we can see, the mean of the first portfolio profit is $ 1353 with a standard deviation of 5837.732. The 5% quantile or value at risk at 5% level is $ 7604, and it represents that this portfolio loss that we will expect to happen no more than 5% of the time, or the probability of the portfolio to loss more than $ 7603 is 5%.  
+
+
+```{r, include=FALSE}
+myETF = c("VOE", "VLUE", "IVE", "SLYV")
+myETF1 = getSymbols(myETF)
+
+
+for(i in myETF){
+  expr = paste0(i, "a = adjustOHLC(", i, ")")
+  eval(parse(text=expr))
+}
+
+all_returns = as.matrix(na.omit(cbind(ClCl(VOEa),ClCl(VLUEa),ClCl(IVEa),ClCl(SLYVa))))
+
+
+initial_capital = 100000
+set.seed(23)
+sim1 = foreach(i=1:5000, .combine='rbind') %do%{
+  total_captital = initial_capital
+  weights = c(0.25, 0.25, 0.25, 0.25)
+  holdings = weights * total_captital
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days){
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_captital = sum(holdings)
+    wealthtracker[today] = total_captital
+  }
+  wealthtracker
+}
+
+```
+
+
+```{r, echo==FALSE}
+mean(sim1[,n_days] - initial_capital)
+sd(sim1[,n_days] - initial_capital)
+quantile(sim1[,n_days]- initial_capital, prob=0.05)
+hist(sim1[,n_days]- initial_capital, breaks=30, main = "Histogram of Profit", xlab = "Profit")
+```
+
+
+##First portfolio with 20 consecutive days
+
+Instead of sampling one date, we sample 20 consecutive days at once to try to capture some good or bad period of the market. The mean of the new approach is $ 1345.342 with a standard deviation of $5934. The 5% quantile or value at risk at 5% level is $ 6176, and it represents that this portfolio loss that we will expect to happen no more than 5% of the time, or the probability of the portfolio to loss more than $ 6176 is 5%. 
+
+As we can see that this approach comes out with similar mean and standard deviation with smaller value at risk. However, when we look at the histogram, we found that it has a longer tail on the left. It implies that the market did very poor in some periods from 2013 to recent. Although our 5% VaR is reduced from $7603 to $6176, we have very small chance of losing >$35000. 
+
+
+
+```{r, include=FALSE}
+
+sample_rowname <- rownames((all_returns))
+initial_capital = 100000
+set.seed(23)
+sim1 = foreach(i=1:1000, .combine='rbind') %do%{
+  total_captital = initial_capital
+  weights = c(0.25, 0.25, 0.25, 0.25)
+  holdings = weights * total_captital
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  start_date = resample(sample_rowname, 1, orig.ids=FALSE)
+  s_index <- which(rownames(all_returns) == start_date)
+  if (s_index > (dim(all_returns)[1]-20)){top20 = head(all_returns, 20)}
+  if (s_index <= (dim(all_returns)[1]-20)) {top20 = all_returns[s_index:(s_index +20), ]}  
+  for(today in 1:n_days){
+    return.today = top20[today,]
+    holdings = holdings + holdings*return.today
+    total_captital = sum(holdings)
+    wealthtracker[today] = total_captital
+  }
+  wealthtracker
+}
+
+```
+
+
+
+```{r, echo=FALSE}
+mean(sim1[,n_days] - initial_capital)
+sd(sim1[,n_days] - initial_capital)
+quantile(sim1[,n_days]- initial_capital, prob=0.05)
+hist(sim1[,n_days]- initial_capital, breaks=30, main = "Histogram of Profit", xlab = "Profit")
+```
+
+
+##Second portfolio
+
+The second set is a group of global ETFs, including "FXI", "INDA", "VGK" and "EWZ", equality weighted. The mean of the first portfolio profit is $ 442 with a standard deviation of 6031. The 5% quantile value at risk at 5% level is $ 9531, and it represents that this portfolio loss that we will expect to happen no more than 5% of the time, or the probability of the portfolio to loss more than $ 9531 is 5%. 
+
+
+
+```{r, include=FALSE}
+ETF2 = c ("FXI", "INDA", "VGK","EWZ")
+myETF2 = getSymbols(ETF2)
+
+for(i in ETF2){
+  expr = paste0(i, "a = adjustOHLC(", i, ")")
+  eval(parse(text=expr))
+}
+
+all_returns2 = as.matrix(na.omit(cbind(ClCl(FXIa),ClCl(INDAa),ClCl(VGKa),ClCl(EWZa))))
+
+
+initial_capital2 = 100000
+set.seed(23)
+sim2 = foreach(i=1:5000, .combine='rbind') %do%{
+  total_captital2 = initial_capital2
+  weights = c(0.25, 0.25, 0.25, 0.25)
+  holdings = weights * total_captital2
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days){
+    return.today = resample(all_returns2, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_captital2 = sum(holdings)
+    wealthtracker[today] = total_captital2
+  }
+  wealthtracker
+}
+```
+
+
+
+```{r, echo=FALSE}
+mean(sim2[,n_days] - initial_capital2)
+sd(sim2[,n_days] - initial_capital2)
+quantile(sim2[,n_days]- initial_capital2, prob=0.05)
+hist(sim2[,n_days]- initial_capital2, breaks=30, main = "Histogram of Profit", xlab = "Profit")
+
+```
+
+
+
+
+##Third portfolio
+
+The 3rd portfolio includes all funds that are technology heavy, with a range of market caps, including '"SPY", "QQQ", "VO", "IVOG" and "VGT", equality weighted. The mean of the first portfolio profit is $ 1330 with a standard deviation of 5277.176. The 5% quantile value at risk at 5% level 6935 is 5%. 
+
+
+```{r, include=FALSE}
+
+ETF3 = c ("SPY", "QQQ", "VO", "IVOG", "VGT")
+
+myETF3 = getSymbols(ETF3)
+
+
+for(i in ETF3){
+  expr = paste0(i, "a = adjustOHLC(", i, ")")
+  eval(parse(text=expr))
+}
+
+all_returns3 = as.matrix(na.omit(cbind(ClCl(SPYa),ClCl(QQQa),ClCl(VOa),ClCl(IVOGa), ClCl(VGTa))))
+                                    
+
+initial_capital3 = 100000
+set.seed(23)
+sim3 = foreach(i=1:5000, .combine='rbind') %do%{
+  total_captital3 = initial_capital3
+  weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+  holdings = weights * total_captital3
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days){
+    return.today = resample(all_returns3, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_captital3 = sum(holdings)
+    wealthtracker[today] = total_captital3
+  }
+  wealthtracker
+}
+
+```
+
+```{r, echo=FALSE}
+mean(sim3[,n_days] - initial_capital3)
+sd(sim3[,n_days] - initial_capital3)
+quantile(sim3[,n_days]- initial_capital3, prob=0.05)
+hist(sim3[,n_days]- initial_capital3, breaks=30, main = "Histogram of Profit", xlab = "Profit")
+```
+
+
+
+
+
+#Q4. Market segmentation
+
+We start our analysis by looking at a correlation plot of our data:
+
+
+```{r,include=FALSE}
+library(ggplot2)
+library(ggcorrplot)
+
+market = read.csv('../data/social_marketing.csv')
+#drop the first column
+market = market[, 2:37]
+#look up the data frame
+str(market)
+#calculate the correlation of the segements
+cormat <- round(cor(market),2)
+
+```
+
+There are a few strongly correlated variables as we can see. Some of them are unexpected while others are logical.  For example, turks that follow topic related to beauty has a high correlation with topics in cooking and fashion, this information can be translated into the house wife or female consumer group as a market segment. Sports_playing is highly correlated with online gaming and college_university topic. This can be interpreted as the young college student target market. Politics is highly correlated with news, these are potentially more mature middle class professionals. We also see some unusual correlations. Health_nutrition is strongly correlated with online gaming. Both fashion and beauty are strongly correlated with cooking. Religion and sports, politics and travel. The one that makes the most sense is health_nutrition being correlated with personal fitness. 
+
+Naturally, we can use this correlation diagram to interpret how we use different variable to segment our market. However, there can be a better way.
+
+```{r,echo=FALSE}
+#plot heatmap of correlation table
+ggcorrplot(cormat, hc.order = TRUE, type = "lower", outline.color = "white")
+
+```
+
+
+We ran a Principle Component Analysis with a max of 36 components, which is the number of variables in our case. We can see that PC1 has a cumulative of 12%, and PC2 adds 8% variance to the cumulative proportion and it monotonically increases to 1 until we reach 36. As shown in the diagram, for our data, we need 18 components to be able to reach a cumulative variance proportion of 80%, so that means we need 18 PC to explain 80% of the original data.
+
+
+
+```{r,echo=FALSE}
+
+
+pca <-prcomp(market, center = TRUE, scale = TRUE)
+summary(pca)
+
+```
+
+This diagram shows how much variance each PC explains.
+
+```{r,echo=FALSE}
+
+#portion of variance 
+pr_var <-  pca$sdev ^ 2
+pve <- pr_var / sum(pr_var)
+plot(pve, xlab = "Principal Component", ylab = "Proportion of Variance Explained", ylim = c(0,1), type = 'b')
+
+```
+
+This diagram shows the cumulative explaining power of PC's.
+
+```{r,echo=FALSE}
+# Cumulative PVE plot
+plot(cumsum(pve), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained", ylim =c(0,1), type = 'b')
+```
+
+
+
+If we take a look at the loading of each principle component, we have very interesting insights. Loadings are the covariances/correlations between the original variables and the unit-scaled components and it can be interpreted as association or co-variability between the variables. It actually offers deeper insides into the segmentation of consumers based on multiple variables, which is superior than just looking at the binary correlation table.
+
+We can see PC1 contributed into a series of variables such as sports_fandom, food, religion, parenting and school, which can be used to segment a consumer group associated with parents with young kids. 
+
+PC2 is associated with photo sharing, cooking, beauty and fashion, which corresponding to the factor to distinguish a subgroup of female consumer such as young women and house wives and social influencer.  
+
+PC3 is associated with travel, politics, news, computers and automotive, which can be interpreted as a market segment of working middle class.
+
+PC4 is associated with food, health_nutrition, cooking, outdoor and fitness, which maps very well into the group of consumers that are into healthy living styles.
+
+PC5 is associated with online_gaming, sports_playing, and college_univerity topics, which is consistent the college students as a market segment.
+
+To summarize, in our case, Principle Components appear to help us combine correlated variables and help us identify market segments naturally.
+
+```{r, echo=FALSE}
+#using first 20 variables with cumulative proportion of variance over 0.8
+rot_loading <- varimax(pca$rotation[, 1:20])
+rot_loading
+```
+
+
+
+
+#Q5. Author attribution
+
+Here is our workflow for data preparation: 
+
+First off we had two file locations, and so we extracted the information from our 50 authors into their training articles and testing articles. There are 50 directories for our 50 authors of interest split into a training and testing set.
+
+Then we used an established for loop to loop over the authors and create a file list for each of them. The end result is that we have labels for each of the documents with an author's name attached.
+
+The reader sets the language to English, which is applied to all documents.
+
+Then we read in all the documents using the above function and establish a corpus of all documents to allow for reprocessing.
+
+
+```{r,include=FALSE}
+
+#Text Library
+library(tm)
+
+#Model building
+library(naivebayes)
+library(randomForest)
+library(ggplot2)
+library(tidyverse)
+
+#Two File locations
+#Split into a train and test
+
+###First off we had two file locations, and so we extracted the information from our 50 authors into their training articles and testing articles. Below are 50 directories for our 50 authors of interest split into a training and testing set.
+author_dirs_train = Sys.glob('../data/ReutersC50/C50train/*')
+author_dirs_test = Sys.glob('../data/ReutersC50/C50test/*')
+
+
+###Below we used an established for loop to loop over the authors and create a file list for each of them. The end result is that we have labels for each of the documents with an author's name attached.
+file_list = NULL
+labels = NULL
+
+for(author in author_dirs_train) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+###The reader sets the language to english, which is applied to all documents.
+readerPlain = function(fname){
+    readPlain(elem=list(content=readLines(fname)), 
+	id=fname, language='en') }
+
+###Below we read in all the documents using the above function and establish a corpus of all documents to allow for preprocessing.
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+```
+
+Here below is our workflow for data preprocessing:
+
+We did all the necessary preprocessing by removing numbers, punctuation, and excess white-space in addition to making sure every word was made lowercase so like words would be recognized as such. We also chose to exclude stop words in the "SMART" category, which should be more useful than the standard stopword list for articles by professional writers.
+
+To manage our data, we create the document term matrix from the corpus to format a matrix that adds up the counts of each word for each document for every author.
+
+We also remove sparse terms, which are the rarest terms to show up in our dataset because these terms would probably have us chasing noise. We also follow up by creating our X_train and y_train variables.
+
+We repeated the process of cleaning up our data and making it more presentable and measurable in the same way that we did for our training set, but now applied to the testing set so that they match.
+
+```{r,include=FALSE}
+
+#Preprocessing
+###Below we did all the necessary preprocessing by removing numbers, punctuation, and excess white-space in addition to making sure every word was made lowercase so like words would be recognized as such. We also chose to exclude stop words in the "SMART" category, which should be more useful than the standard stopword list for articles by professional writers.
+
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+###Lastly in managing our data, we create the document term matrix from the corpus to format a matrix that adds up the counts of each word for each document for every author.
+DTM = DocumentTermMatrix(my_corpus)
+DTM 
+class(DTM)  # a special kind of sparse matrix format
+#inspect(DTM[1:10,1:20])
+
+###We also remove sparse terms, which are the rarest terms to show up in our dataset because these terms would probably have us chasing noise. We also follow up by creating our X_train and y_train variables.
+DTM = removeSparseTerms(DTM, 0.975)
+DTM
+
+findFreqTerms(DTM, 250)
+
+X_train = as.matrix(DTM)
+y_train = labels
+
+
+
+### Below we just repeated the process of cleaning up our data and making it more presentable and measurable in the same way that we did for our training set, but now applied to the testing set so that they match.
+
+file_list_test = NULL
+labels_test = NULL
+
+for(author in author_dirs_test) {
+	author_name_test = substring(author, first=29)
+	files_to_add_test = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list, files_to_add)
+	labels_test = append(labels, rep(author_name, length(files_to_add)))
+}
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+my_corpus_test = Corpus(VectorSource(all_docs_test))
+
+# Preprocessing for test data
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART"))
+
+DTM_test = DocumentTermMatrix(my_corpus_test)
+DTM_test # some basic summary statistics
+class(DTM_test)  # a special kind of sparse matrix format
+
+inspect(DTM_test[1:10,1:20])
+DTM_test = removeSparseTerms(DTM_test, 0.975)
+
+class(colnames(DTM_test))
+
+X_test = as.matrix(DTM_test)
+y_test = labels_test
+####End Cleaning of test data######
+
+
+```
+
+One of the issues disclosed about the dataset is that there could be words present in either set (training or testing) that would not be present in the other dataset, which could be problematic for probabilities (as some probabilities could be zero) and for a random forest model, which we want to implement. We used the code to determine the total number of words unique to only one set. There are 13 potentially problematic words.
+
+Here are the problematic words.
+
+```{r,echo=FALSE}
+
+###One of the issues disclosed about he dataset is that there could be words present in either set (training or testing) that would not be present in the other dataset, which could be problematic for probabilities (as some probabilities could be zero) and for a random forest model, which we want to implement. We used the code below to determine the total number of words unique to only one set. There are 13 potentially problematic words.
+
+setdiff(colnames(DTM), colnames(DTM_test))
+length(setdiff(colnames(DTM), colnames(DTM_test)))
+
+```
+
+We started by using the Naive Bayes algorithm:
+
+To start with our modeling we chose a basic approach with Naive Bayes to get distinct probabilities that a word will show up under a particular author's article. To deal with the missing words we added a laplace of 1, to set the default for these words as 1 occurrence. However, running the laplace as 0 and 1 returned the same prediction accuracy, meaning that the 13 words had no effect against the vast amount of words in the model. up probabilities... low prediction accuracy because of the amount of competing probabilities... 
+
+```{r}
+
+model <- naive_bayes(X_train, as.character(y_train), laplace=1) 
+
+pred <- predict(model, X_test)
+
+
+```
+
+As seen below, using a confusion matrix we were able to test the prediction accuracy of our model and probabilities on the test dataset. This gave a fairly low accuracy of around 38%. However, we figured this was understandable due to the large amount of probabilities created and competing for many different authors, since we basically have a large list of probabilities from this model.
+
+
+```{r}
+
+confusionMatrix = table(y_test, pred)
+acc = sum(diag(confusionMatrix ))/sum(confusionMatrix)
+acc
+
+```
+
+Then we found areas where the training and testing matrix intersected, and used this to make a matrix and tfidf weight that uses this matrix of only intersected columns, which removes our 13 missing words in order to do a random forest without error. This is the key step to ensure our algorithm run smoothly without error.
+
+```{r}
+col_i = intersect(colnames(DTM), colnames(DTM_test))
+DTM_i <- DTM[ ,which((colnames(DTM) %in% col_i)==TRUE)]
+tfidf = weightTfIdf(DTM_i)
+
+X_train = as.matrix(tfidf)
+scrub_cols = which(colSums(X_train) == 0)
+X_train = X_train[,-scrub_cols]
+```
+
+To improve the accuracy of our author attribution, we then tried to apply PCA to reduce the dimentionality of the text data and then use RandomForest to help identify the authorship using these Principle Components. 
+
+
+
+```{r,include=FALSE}
+
+pca_author = prcomp(X_train, scale=TRUE)
+
+pca = prcomp(X_train, scale=TRUE, rank=2)
+loadings = pca$rotation
+scores = pca$x
+
+plot1 = qplot(scores[,1], scores[,2], color= "Red", xlab = "PC1", ylab = "PC2")
+
+plot1
+
+biplot(pca)
+
+options(max.print=100000)
+
+
+```
+Though we have a vast amount of principal components, the following summary shows a tapering off at around 95 to 98% at around 1400 PCs, so after some trial and error we chose a principal components amount of 1099 for our random forest, in which to hopefully achieve a high accuracy on the out of sample data.
+
+```{r}
+
+#summary(pca_author)
+pr_var <-  pca_author$sdev ^ 2
+pve <- pr_var / sum(pr_var)
+plot(cumsum(pve), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained", ylim =c(0,1), type = 'b')
+
+
+```
+
+From our principal components analysis we wanted to make a supervised learning model from the simplified data. We chose a random tree, which acted as a natural extension of our principal components analysis. This should be an effective model to reach our desired prediction accuracy.  
+
+```{r}
+
+rf_model = randomForest(X_train[, 1:1099],factor(y_train), ntree=500)
+
+```
+
+Below we also decided to display and plot the importance of the most influential words in our random forest model. We can see that beijing, czech, and toronto are possibly the most deterministic words for finding the correct author.
+
+```{r,echo=FALSE}
+###Below we also decided to display and plot the importance of the most influential words in our random forest model. We can see that beijing, czech, and toronto are possibly the most deterministic words for finding the correct author. importance(rf_model)
+varImpPlot(rf_model)
+
+```
+
+Creating another confusion matrix for the results of the random forest model gave an accuracy of about 98% for our out of sample predictions, which is fantastic. This is a much improved model over our naive bayes model, and we are very satisfied with the results. Clearly, this is our preferred model, and there is little room for improvement on its predictive power.
+
+```{r}
+
+pred2 <- predict(rf_model, X_test)
+confusionMatrix2 = table(y_test, pred2)
+acc2 = sum(diag(confusionMatrix2 ))/sum(confusionMatrix2)
+acc2
+```
+
+
+#Q6. Association rule mining
+
+```{r,include=FALSE}
+
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+library(arules)
+library(arulesViz)
+
+Groceries = read.transactions('../data/groceries.txt', sep=',')
+
+# calculates support for frequent items
+frequentItems <- eclat (Groceries, parameter = list(supp = 0.1, maxlen = 15)) 
+
+```
+
+
+The data set contains 9835 baskets (rows) and 169 items (columns). Here are the most frequent items.As we can see, for all transactions, whole milk is the most popular items, followed by other vegetables, rolls/buns, soda, and yogurt, etc.
+
+
+```{r,echo=FALSE}
+itemFrequencyPlot(Groceries, topN=10, type="absolute", main="Item Frequency")
+```
+
+
+```{r,include=FALSE}
+
+#Set minimum support level
+# Min Support as 0.002, confidence as 0.8.
+rules <- apriori (Groceries, parameter = list(supp = 0.01, conf = 0.5, maxlen=5))
+# 'high-confidence' rules
+rules_conf <- sort (rules, by="confidence", decreasing=TRUE)
+rules_lift <- sort (rules, by="lift", decreasing=TRUE)
+```
+
+We pruned the tree by applying the Apriori Principle and only kept the sets with support (set probability) over 0.01 and confidence (conditional probability) over 0.5 to prune the set collections to a small size to investigate details, and skip the less frequent sets. 
+
+These are the high confidence sets. For example, basket contains curd, yogurt and milk are only 1% of all baskets, however, if a basket contains curd and yogurt, the probability of the basket containing whole milk is 58% percent. Remember, the milk by itself, appears in ~2500 out of 9800 baskets, corresponding to about 25% of support on a single item set. So there is a lift of 2.28 here.
+
+It is prevalent that if some customers like dairy products in general. So if a consumer buys both curd and yogurt, they are more likely to buy milk.
+
+
+```{r}
+inspect(head(rules_conf))
+```
+
+Lets look at the high lift items. For example, other vegetables as a single item has a support of ~19%. However, with citrus fruit and root vegetables in the basket, the probability increases to 59%, with a lift = 3. It consistent with consumer behavior that if one buys fruits and root vegetables, she or he would likely buy other vegetables. 
+
+
+
+```{r}
+inspect(head(rules_lift))
+```
+
+Let's look at the visualization of 15 rules based on the confidence and support of interest. As you may notice, the high confidence and high lift points are mostly always associated with low support set, meaning the boosting power is higher for originally low occurrence sets.
+
+```{r,echo=FALSE}
+plot(rules)
+```
+
+
+```{r}
+plot(rules, measure = c("support", "lift"), shading = "confidence")
+```
+
+
+Let's look at some details. As we can see, other vegetables and whole milk are the 2 main items that are frequently bought together with lift from other sets, such as rolls/buns, root vegetables. Note that the support for rolls/buns, root vegetables and milk and rolls/buns, root vegetables and other vegetables are similar at 0.012, but the lift for vegetables is higher as shown because the support for other vegetables as a single item is lower than that of milk. This shows that the boost of probability by rolls/buns and root vegetables as a set for vegetables is stronger than milk because milk already has a high support by itself, as the single most frequent item in baskets.
+
+
+```{r}
+# Create matrix plot
+plot(rules, method = "grouped matrix")
+```
+
+
+Now let us lower the support level to 0.002 and confidence level at 0.5 to consider more infrequent sets. There are, overall, 1098 rules. Still, we observe high lift values in relatively low support sets, which is understandable. This is because if a set is already frequent by itself, it's more difficult to increase the probability than sets with low support.
+
+```{r,echo=FALSE}
+
+rules2 <- apriori (Groceries, parameter = list(supp = 0.002, conf = 0.5, maxlen=15))
+plot(rules2)
+```
+
+
+```{r, echo=FALSE}
+plot(rules2, measure = c("support", "lift"), shading = "confidence")
+```
+
+
+```{r,echo=FALSE}
+rules_conf <- sort (rules2, by="confidence", decreasing=TRUE)
+rules_lift <- sort (rules2, by="lift", decreasing=TRUE)
+inspect(head(rules_conf))
+
+
+
+```
+
+
+As we can see here, set with butter and hard cheese provide a high lift (7) for whipped/sour cream, with the set support of 0.2%.
+
+Beef, citrus, fruit and other vegetables provide a ~6 lift for root vegetables. This is most likely because these are ingredients of certain popular recipes, and people often buy them together.
+
+
+```{r,echo=FALSE}
+
+inspect(head(rules_lift))
+
+```
+
+
+
+If we only look at rules with lift over 5, for example, rule5, that frozen vegetables, other vegetables, yogurt had a lift on the chance of whipped/sour cream, where the overall support is 0.00224 with confidence of 0.423 and lift = 5.9. This means that people who buy frozen vegetables and other vegetables and yogurt are much more likely to by sour cream and whipped cream.
+
+
+```{r,echo=FALSE}
+
+subrules2 <- sample(subset(rules2, lift > 5), 5)
+plot(subrules2, method = "graph", 
+     igraphLayout = "layout_in_circle")
+
+```
+
+
+Another visualization of association between item sets. Herbs and yogurt provide a median lift for root vegetables and citrus fruit. Other vegetables and frozen vegetables provide a high lift for root vegetables.
+
+
+
+```{r}
+
+plot(subrules2, method = "graph")
+```
+
+
